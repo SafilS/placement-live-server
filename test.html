@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket Test</title>
+</head>
+
+<body>
+
+    <h1>Placement WebSocket Test</h1>
+
+    <p id="status">Connecting...</p>
+
+    <pre id="output"></pre>
+
+    <script>
+
+        const status = document.getElementById("status");
+        const output = document.getElementById("output");
+
+        const socket = new WebSocket(
+            "ws://127.0.0.1:5050/ws"
+        );
+
+        socket.onopen = () => {
+
+            status.textContent = "🟢 Connected to Node.js";
+
+            console.log("WebSocket connected");
+
+        };
+
+
+        socket.onmessage = (event) => {
+
+            console.log("Message received:", event.data);
+
+            output.textContent =
+                event.data;
+
+        };
+
+
+        socket.onclose = () => {
+
+            status.textContent =
+                "🔴 Disconnected";
+
+        };
+
+
+        socket.onerror = (error) => {
+
+            status.textContent =
+                "❌ WebSocket error";
+
+            console.error(error);
+
+        };
+
+    </script>
+
+</body>
+</html>
