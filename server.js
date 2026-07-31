@@ -83,6 +83,38 @@ app.post("/api/google-sheet/update", async (req, res) => {
         console.log(student);
 
 
+        // ==========================================
+        // 1. IGNORE STUDENTS NOT INTERESTED
+        // ==========================================
+
+        const status = String(student.status || "")
+            .trim()
+            .toUpperCase();
+
+        if (
+            status === "NOT INTERESTED" ||
+            status === "NOT_INTRESTED" ||
+            status === "NOT PARTICIPATING" ||
+            status === "NOT_PARTICIPATING"
+        ) {
+
+            console.log(
+                `Ignoring student ${student.roll_no} - not interested`
+            );
+
+            return res.json({
+                success: true,
+                ignored: true,
+                message: "Student is not interested"
+            });
+
+        }
+
+
+        // ==========================================
+        // 2. VALIDATE ROLL NUMBER
+        // ==========================================
+
         if (!student.roll_no) {
 
             return res.status(400).json({
@@ -93,63 +125,113 @@ app.post("/api/google-sheet/update", async (req, res) => {
         }
 
 
-        // Update student in Supabase
+        // ==========================================
+        // 3. DETERMINE PLACEMENT STATUS
+        // ==========================================
+
+        let placementStatus = "UNPLACED";
+
+        if (status === "PLACED") {
+            placementStatus = "PLACED";
+        }
+
+
+        // ==========================================
+        // 4. PREPARE SUPABASE DATA
+        // ==========================================
+
+        const studentData = {
+
+            roll_no: String(student.roll_no).trim(),
+
+            register_no: String(student.roll_no).trim(),
+
+            name: student.name || "Unknown",
+
+            email:
+                student.domain_email ||
+                student.personal_email ||
+                `${student.roll_no}@placeholder.local`,
+
+            phone: student.mobile || null,
+
+            department:
+                student.department || "CSE",
+
+            section:
+                student.section || null,
+
+            gender:
+                student.gender || null,
+
+            dob:
+                student.dob || null,
+
+            tenth_percentage:
+                student.tenth_percentage !== "" &&
+                student.tenth_percentage != null
+                    ? Number(student.tenth_percentage)
+                    : null,
+
+            twelfth_percentage:
+                student.twelfth_percentage !== "" &&
+                student.twelfth_percentage != null
+                    ? Number(student.twelfth_percentage)
+                    : null,
+
+            diploma:
+                student.diploma || null,
+
+            cgpa:
+                student.cgpa !== "" &&
+                student.cgpa != null
+                    ? Number(student.cgpa)
+                    : null,
+
+            personal_email:
+                student.personal_email || null,
+
+            resume_url:
+                student.resume || null,
+
+            address:
+                student.address || null,
+
+            interest_domain:
+                student.domain || null,
+
+            placement_status: placementStatus
+        };
+
+
+        console.log("Data going to Supabase:");
+        console.log(studentData);
+
+
+        // ==========================================
+        // 5. UPSERT INTO SUPABASE
+        // ==========================================
+
         const { data, error } = await supabase
+
             .from("students")
-            .update({
 
-                name: student.name,
+            .upsert(
+                studentData,
+                {
+                    onConflict: "roll_no"
+                }
+            )
 
-                placement_status: student.status,
-
-                department: student.department,
-
-                section: student.section,
-
-                gender: student.gender,
-
-                dob: student.dob || null,
-
-                tenth_percentage:
-                    student.tenth_percentage || null,
-
-                twelfth_percentage:
-                    student.twelfth_percentage || null,
-
-                diploma:
-                    student.diploma || null,
-
-                cgpa:
-                    student.cgpa || null,
-
-                phone:
-                    student.mobile || null,
-
-                email:
-                    student.domain_email,
-
-                personal_email:
-                    student.personal_email || null,
-
-                resume_url:
-                    student.resume || null,
-
-                address:
-                    student.address || null,
-
-                interest_domain:
-                    student.domain || null
-
-            })
-            .eq("roll_no", student.roll_no)
             .select()
+
             .single();
 
 
         if (error) {
 
             console.error(
-                "Supabase update error:",
+                "Supabase upsert error:",
                 error
             );
 
@@ -167,14 +249,15 @@ app.post("/api/google-sheet/update", async (req, res) => {
 
 
         console.log(
-            "Supabase student updated:",
-            data
+            "Supabase student saved:"
         );
 
+        console.log(data);
 
-        // ======================================
-        // SEND UPDATE TO DASHBOARD
-        // ======================================
+
+        // ==========================================
+        // 6. SEND LIVE UPDATE TO DASHBOARD
+        // ==========================================
 
         const message = JSON.stringify({
 
@@ -185,11 +268,19 @@ app.post("/api/google-sheet/update", async (req, res) => {
         });
 
 
+        let sent = 0;
+
+
         clients.forEach((client) => {
 
-            if (client.readyState === WebSocket.OPEN) {
+            if (
+                client.readyState ===
+                WebSocket.OPEN
+            ) {
 
                 client.send(message);
+
+                sent++;
 
             }
 
@@ -197,15 +288,19 @@ app.post("/api/google-sheet/update", async (req, res) => {
 
 
         console.log(
-            `Update sent to ${clients.size} dashboard(s)`
+            `Live update sent to ${sent} dashboard(s)`
         );
 
+
+        // ==========================================
+        // 7. RESPONSE
+        // ==========================================
 
         res.json({
 
             success: true,
 
-            message: "Student updated successfully",
+            message: "Student synchronized successfully",
 
             student: data
 
@@ -223,15 +318,15 @@ app.post("/api/google-sheet/update", async (req, res) => {
 
             success: false,
 
-            message: "Internal server error"
+            message: "Internal server error",
+
+            error: error.message
 
         });
 
     }
 
-});
-
-
+})
 // ==========================================
 // START SERVER
 // ==========================================
