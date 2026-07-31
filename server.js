@@ -1,6 +1,9 @@
+require("dotenv").config();
+
 const express = require("express");
 const http = require("http");
 const WebSocket = require("ws");
+const { createClient } = require("@supabase/supabase-js");
 
 const app = express();
 
@@ -10,7 +13,17 @@ app.use(express.json());
 
 
 // ==========================================
-// HTTP SERVER
+// SUPABASE
+// ==========================================
+
+const supabase = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+);
+
+
+// ==========================================
+// HTTP
 // ==========================================
 
 app.get("/", (req, res) => {
@@ -19,25 +32,17 @@ app.get("/", (req, res) => {
 
 
 // ==========================================
-// CREATE HTTP SERVER
+// WEBSOCKET
 // ==========================================
 
 const server = http.createServer(app);
-
-
-// ==========================================
-// WEBSOCKET SERVER
-// ==========================================
 
 const wss = new WebSocket.Server({
     server,
     path: "/ws"
 });
 
-
-// Connected dashboards
 const clients = new Set();
-
 
 wss.on("connection", (socket) => {
 
@@ -65,43 +70,164 @@ wss.on("connection", (socket) => {
 
 
 // ==========================================
-// GOOGLE SHEET WEBHOOK
+// GOOGLE SHEET → SUPABASE
 // ==========================================
 
-app.post("/api/google-sheet/update", (req, res) => {
+app.post("/api/google-sheet/update", async (req, res) => {
 
-    console.log("Google Sheet update received:");
-    console.log(req.body);
+    try {
 
+        const student = req.body;
 
-    // Send update to all connected dashboards
-
-    const message = JSON.stringify({
-        type: "STUDENT_UPDATED",
-        data: req.body
-    });
+        console.log("Google Sheet update received:");
+        console.log(student);
 
 
-    clients.forEach((client) => {
+        if (!student.roll_no) {
 
-        if (client.readyState === WebSocket.OPEN) {
-
-            client.send(message);
+            return res.status(400).json({
+                success: false,
+                message: "roll_no is required"
+            });
 
         }
 
-    });
+
+        // Update student in Supabase
+        const { data, error } = await supabase
+            .from("students")
+            .update({
+
+                name: student.name,
+
+                placement_status: student.status,
+
+                department: student.department,
+
+                section: student.section,
+
+                gender: student.gender,
+
+                dob: student.dob || null,
+
+                tenth_percentage:
+                    student.tenth_percentage || null,
+
+                twelfth_percentage:
+                    student.twelfth_percentage || null,
+
+                diploma:
+                    student.diploma || null,
+
+                cgpa:
+                    student.cgpa || null,
+
+                phone:
+                    student.mobile || null,
+
+                email:
+                    student.domain_email,
+
+                personal_email:
+                    student.personal_email || null,
+
+                resume_url:
+                    student.resume || null,
+
+                address:
+                    student.address || null,
+
+                interest_domain:
+                    student.domain || null
+
+            })
+            .eq("roll_no", student.roll_no)
+            .select()
+            .single();
 
 
-    console.log(
-        `Update sent to ${clients.size} dashboard(s)`
-    );
+        if (error) {
+
+            console.error(
+                "Supabase update error:",
+                error
+            );
+
+            return res.status(500).json({
+
+                success: false,
+
+                message: "Supabase update failed",
+
+                error: error.message
+
+            });
+
+        }
 
 
-    res.json({
-        success: true,
-        message: "Google Sheet update received successfully"
-    });
+        console.log(
+            "Supabase student updated:",
+            data
+        );
+
+
+        // ======================================
+        // SEND UPDATE TO DASHBOARD
+        // ======================================
+
+        const message = JSON.stringify({
+
+            type: "STUDENT_UPDATED",
+
+            data: data
+
+        });
+
+
+        clients.forEach((client) => {
+
+            if (client.readyState === WebSocket.OPEN) {
+
+                client.send(message);
+
+            }
+
+        });
+
+
+        console.log(
+            `Update sent to ${clients.size} dashboard(s)`
+        );
+
+
+        res.json({
+
+            success: true,
+
+            message: "Student updated successfully",
+
+            student: data
+
+        });
+
+
+    } catch (error) {
+
+        console.error(
+            "Server error:",
+            error
+        );
+
+        res.status(500).json({
+
+            success: false,
+
+            message: "Internal server error"
+
+        });
+
+    }
 
 });
 
