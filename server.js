@@ -72,7 +72,82 @@ wss.on("connection", (socket) => {
 // ==========================================
 // GOOGLE SHEET → SUPABASE
 // ==========================================
+function normalizeDate(value) {
 
+    if (!value) {
+        return null;
+    }
+
+    // Already a Date object
+    if (value instanceof Date && !isNaN(value)) {
+        return value.toISOString().split("T")[0];
+    }
+
+    const date = String(value).trim();
+
+    // DD-MM-YYYY
+    const match = date.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+
+    if (match) {
+
+        const [, day, month, year] = match;
+
+        return `${year}-${month}-${day}`;
+
+    }
+
+    // DD/MM/YYYY
+    const slashMatch =
+        date.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+
+    if (slashMatch) {
+
+        const [, day, month, year] = slashMatch;
+
+        return `${year}-${month}-${day}`;
+
+    }
+
+    // Already YYYY-MM-DD
+    if (
+        /^\d{4}-\d{2}-\d{2}$/.test(date)
+    ) {
+
+        return date;
+
+    }
+
+    console.warn(
+        "Invalid DOB:",
+        value
+    );
+
+    return null;
+}
+
+
+function normalizeNumber(value) {
+
+    if (
+        value === null ||
+        value === undefined ||
+        value === ""
+    ) {
+
+        return null;
+
+    }
+
+    const number = Number(value);
+
+    if (Number.isNaN(number)) {
+
+        return null;
+
+    }
+
+    return number;
+}
 app.post("/api/google-sheet/update", async (req, res) => {
 
     try {
@@ -165,22 +240,22 @@ app.post("/api/google-sheet/update", async (req, res) => {
                 student.gender || null,
 
             dob:
-                student.dob || null,
+                normalizeDate(student.dob),
 
             tenth_percentage:
-                student.tenth_percentage !== "" &&
-                student.tenth_percentage != null
-                    ? Number(student.tenth_percentage)
-                    : null,
+                normalizeNumber(student.tenth_percentage),
 
             twelfth_percentage:
-                student.twelfth_percentage !== "" &&
-                student.twelfth_percentage != null
-                    ? Number(student.twelfth_percentage)
-                    : null,
+                normalizeNumber(student.twelfth_percentage),
 
+            cgpa:
+                normalizeNumber(student.cgpa),
             diploma:
-                student.diploma || null,
+                student.diploma !== null &&
+                student.diploma !== undefined &&
+                student.diploma !== ""
+                    ? String(student.diploma)
+                    : null,
 
             cgpa:
                 student.cgpa !== "" &&
@@ -338,3 +413,4 @@ server.listen(PORT, () => {
     );
 
 });
+
