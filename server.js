@@ -12,14 +12,13 @@ app.get("/", (req, res) => {
 
 app.post("/api/google-sheet/update", (req, res) => {
 
-    console.log("Google Sheet update received:");
-    console.log(req.body);
+    console.log("🔥🔥🔥 WEBHOOK HIT 🔥🔥🔥");
+    console.log("Received data:", JSON.stringify(req.body));
 
-    res.json({
+    res.status(200).json({
         success: true,
-        message: "Google Sheet update received successfully"
+        message: "Webhook received by Render"
     });
-
 });
 
 app.listen(PORT, () => {
