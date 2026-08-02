@@ -148,6 +148,7 @@ function normalizeNumber(value) {
 
     return number;
 }
+
 app.post("/api/google-sheet/update", async (req, res) => {
 
     try {
@@ -401,7 +402,153 @@ app.post("/api/google-sheet/update", async (req, res) => {
 
     }
 
-})
+});
+
+app.post("/api/company-result/update", async (req, res) => {
+
+    try {
+
+        const {
+            roll_no,
+            name,
+            gender,
+            student_status,
+            company,
+            result,
+            eliminated_round,
+            batch = "2023",
+            section = "B"
+        } = req.body;
+
+        console.log("Company result update received:");
+        console.log(req.body);
+
+        if (!roll_no || !company || !result) {
+            return res.status(400).json({
+                success: false,
+                message: "roll_no, company and result are required"
+            });
+        }
+
+        // Find student
+        const { data: student, error: studentError } =
+            await supabase
+                .from("students")
+                .select("id, register_no")
+                .eq("register_no", roll_no)
+                .maybeSingle();
+
+        if (studentError) {
+            console.error("Student lookup error:", studentError);
+
+            return res.status(500).json({
+                success: false,
+                message: "Student lookup failed",
+                error: studentError.message
+            });
+        }
+
+        // Find company
+        const { data: companyData, error: companyError } =
+            await supabase
+                .from("companies")
+                .select("id, name")
+                .ilike("name", company)
+                .maybeSingle();
+
+        if (companyError) {
+            console.error("Company lookup error:", companyError);
+
+            return res.status(500).json({
+                success: false,
+                message: "Company lookup failed",
+                error: companyError.message
+            });
+        }
+
+        const entry = {
+
+            student_id: student?.id || null,
+
+            register_no: roll_no,
+
+            student_name: name,
+
+            gender: gender || null,
+
+            student_status: student_status || null,
+
+            batch,
+
+            section,
+
+            company_id: companyData?.id || null,
+
+            company_name: company,
+
+            result,
+
+            eliminated_round:
+                eliminated_round !== null &&
+                eliminated_round !== undefined &&
+                eliminated_round !== ""
+                    ? Number(eliminated_round)
+                    : null
+        };
+
+        console.log("Data going to student_company_results:");
+        console.log(entry);
+
+        const { data, error } = await supabase
+            .from("student_company_results")
+            .upsert(
+                entry,
+                {
+                    onConflict:
+                        "register_no,company_name,batch,section"
+                }
+            )
+            .select()
+            .single();
+
+        if (error) {
+
+            console.error(
+                "student_company_results upsert error:",
+                error
+            );
+
+            return res.status(500).json({
+                success: false,
+                message: "Database update failed",
+                error: error.message
+            });
+        }
+
+        console.log("Company result updated successfully");
+
+        res.json({
+            success: true,
+            message: "Company result updated successfully",
+            data
+        });
+
+    } catch (error) {
+
+        console.error(
+            "Company result server error:",
+            error
+        );
+
+        res.status(500).json({
+            success: false,
+            message: "Server error",
+            error: error.message
+        });
+
+    }
+
+});
 // ==========================================
 // START SERVER
 // ==========================================
