@@ -549,6 +549,75 @@ app.post("/api/company-result/update", async (req, res) => {
     }
 
 });
+
+app.post("/api/company-result/delete", async (req, res) => {
+
+    try {
+
+        const {
+            roll_no,
+            company,
+            batch = "2023",
+            section = "B"
+        } = req.body;
+
+        console.log("Company result delete received:");
+        console.log(req.body);
+
+        if (!roll_no || !company) {
+            return res.status(400).json({
+                success: false,
+                message: "roll_no and company are required"
+            });
+        }
+
+        const { error } = await supabase
+            .from("student_company_results")
+            .delete()
+            .eq("register_no", roll_no)
+            .eq("company_name", company)
+            .eq("batch", batch)
+            .eq("section", section);
+
+        if (error) {
+
+            console.error(
+                "Company result delete error:",
+                error
+            );
+
+            return res.status(500).json({
+                success: false,
+                message: "Database delete failed",
+                error: error.message
+            });
+        }
+
+        console.log(
+            "Company result deleted successfully"
+        );
+
+        res.json({
+            success: true,
+            message: "Company result deleted successfully"
+        });
+
+    } catch (error) {
+
+        console.error(
+            "Delete server error:",
+            error
+        );
+
+        res.status(500).json({
+            success: false,
+            message: "Server error",
+            error: error.message
+        });
+    }
+
+});
+
 // ==========================================
 // START SERVER
 // ==========================================
