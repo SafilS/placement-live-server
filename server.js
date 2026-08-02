@@ -44,6 +44,27 @@ const wss = new WebSocket.Server({
 
 const clients = new Set();
 
+function broadcast(message) {
+
+    const data = JSON.stringify(message);
+
+    let sent = 0;
+
+    clients.forEach((client) => {
+
+        if (client.readyState === WebSocket.OPEN) {
+
+            client.send(data);
+            sent++;
+
+        }
+
+    });
+
+    console.log(`Live update sent to ${sent} dashboard(s)`);
+
+}
+
 wss.on("connection", (socket) => {
 
     console.log("Dashboard connected");
@@ -527,6 +548,12 @@ app.post("/api/company-result/update", async (req, res) => {
 
         console.log("Company result updated successfully");
 
+        // Notify all connected dashboards
+        broadcast({
+            type: "COMPANY_RESULT_UPDATED",
+            data: data
+        });
+
         res.json({
             success: true,
             message: "Company result updated successfully",
@@ -596,6 +623,17 @@ app.post("/api/company-result/delete", async (req, res) => {
         console.log(
             "Company result deleted successfully"
         );
+
+        // Notify dashboards
+        broadcast({
+            type: "COMPANY_RESULT_DELETED",
+            data: {
+                roll_no,
+                company,
+                batch,
+                section
+            }
+        });
 
         res.json({
             success: true,
